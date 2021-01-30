@@ -1,3 +1,18 @@
+# Notes
+See https://github.com/shinyquagsire23/Switch-Fightstick
+
+Things I did, installing on Linux Mint:
+1. Edit makefile to set `MCU = atmega32u4` for use with Arduino Micro
+2. Download LUFA library, extract and rename to `lufa`,  and drop in same directory as this project. There should be a `lufa/LUFA` folder.
+3. Install gcc-avr
+ * https://www.pjrc.com/teensy/gcc.html
+4. Run `make`
+5. Follow https://github.com/shinyquagsire23/Switch-Fightstick#compiling-and-flashing-onto-the-arduino-micro to flash Joystick.hex
+ * I got an error, `SerialException: Error touching serial port '/dev/ttyACM0'.`.  Fixed by running `sudo chmod a+rw /dev/ttyACM0` 
+ * I had to be very fast to CTRL+A and CTRL+C the avrdude command from the console output. There was too much output and the console cleared the scrollback. I captured my command in `flash.sh`
+
+Next steps... define some input pins, and hook up some buttons. Let's hope the latency is good enough for Taiko Drum Master!
+
 # World of Final Fantasy XP Auto-Grinder
 
 A fork of a fork of a fork, modified to grind XP in a specific location in World of Final Fantasy, to level my character past level 60, so I can max out a few things in the game.
