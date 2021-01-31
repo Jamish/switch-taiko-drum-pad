@@ -245,7 +245,6 @@ void HID_Task(void) {
 #define ECHOES 2
 int echoes = 0;
 USB_JoystickReport_Input_t last_report;
-int pd1_previous = 0;
 
 int ass;
 
@@ -278,11 +277,9 @@ void GetNextReport(USB_JoystickReport_Input_t* const ReportData) {
 	}
 
 	ass = digitalRead(PIND, PD1);
-	if (ass == 0 && ass != pd1_previous) {
+	if (ass == 0) {
 		PressButton(ReportData, A);
 	}
-
-	pd1_previous = ass;
 
 	/*
 	// Read the port/pin defined by input
