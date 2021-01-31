@@ -43,20 +43,28 @@ typedef enum {
 } Buttons_t;
 
 typedef struct {
+	int pin;
+	int port;
 	Buttons_t button;
-	uint16_t duration;
-} command; 
+	int state;
+	int previous_state;
+} InputData;
 
-static const command step[] = {
-	// Setup controller
-	{ NOTHING,  250 },
-	{ LEFT,   5 },
-	{ NOTHING,  100 },
-	{ RIGHT,   5 }
-};
+void initializeInputData(InputData* input, int pin, int port, Buttons_t button) {
+	input->pin = pin;
+	input->port = port;
+	input->button = button;
+	input->state = 0;
+	input->previous_state = 0;
+}
+
+InputData input_a;
 
 // Main entry point.
 int main(void) {
+	// Initialize variables
+	initializeInputData(&input_a, PIND, PD1, A);
+
 	// We'll start by performing hardware and peripheral setup.
 	SetupHardware();
 	// We'll then enable global interrupts for our use.
@@ -79,18 +87,14 @@ void SetupHardware(void) {
 
 	// We need to disable clock division before initializing the USB hardware.
 	clock_prescale_set(clock_div_1);
-	// We can then initialize our hardware and peripherals, including the USB stack.
 
-	#ifdef ALERT_WHEN_DONE
-	// Both PORTD and PORTB will be used for the optional LED flashing and buzzer.
-	#warning LED and Buzzer functionality enabled. All pins on both PORTB and \
-PORTD will toggle when printing is done.
-	DDRD  = 0xFF; //Teensy uses PORTD
-	PORTD =  0x0;
-                  //We'll just flash all pins on both ports since the UNO R3
-	DDRB  = 0xFF; //uses PORTB. Micro can use either or, but both give us 2 LEDs
-	PORTB =  0x0; //The ATmega328P on the UNO will be resetting, so unplug it?
-	#endif
+	// Pin PD1 = Pin Digital 2 on Arduino Micro
+	DDRD &= ~(1<<PD1); // Low is input. High is output. This sets the Data Direction Register "D" bit corresponding to Pin D2 to 0, or input.
+	PORTD |= (1<<PD1); // Set internal pull-up resistor on PD2
+
+	// Set LED pin to Output (Pin 13 on arduino, PC7 on atmega)
+	DDRC |= (1<<PC7);
+
 	// The USB stack should be initialized last.
 	USB_Init();
 }
@@ -98,6 +102,9 @@ PORTD will toggle when printing is done.
 // Fired to indicate that the device is enumerating.
 void EVENT_USB_Device_Connect(void) {
 	// We can indicate that we're enumerating here (via status LEDs, sound, etc.).
+	
+	//Set LED Pin High
+	PORTC |= (1<<PC7);
 }
 
 // Fired to indicate that the device is no longer connected to a host.
@@ -121,6 +128,76 @@ void EVENT_USB_Device_ControlRequest(void) {
 	// We can handle two control requests: a GetReport and a SetReport.
 
 	// Not used here, it looks like we don't receive control request from the Switch.
+}
+
+void PressButton(USB_JoystickReport_Input_t* const ReportData, Buttons_t button) {
+	switch (button)
+	{
+		case UP:
+			ReportData->LY = STICK_MIN;				
+			break;
+
+		case LEFT:
+			ReportData->LX = STICK_MIN;				
+			break;
+
+		case DOWN:
+			ReportData->LY = STICK_MAX;				
+			break;
+
+		case RIGHT:
+			ReportData->LX = STICK_MAX;				
+			break;
+
+		case PLUS:
+			ReportData->Button |= SWITCH_PLUS;
+			break;
+
+		case MINUS:
+			ReportData->Button |= SWITCH_MINUS;
+			break;
+
+		case A:
+			ReportData->Button |= SWITCH_A;
+			break;
+
+		case B:
+			ReportData->Button |= SWITCH_B;
+			break;
+
+		case X:
+			ReportData->Button |= SWITCH_X;
+			break;
+
+		case Y:
+			ReportData->Button |= SWITCH_Y;
+			break;
+
+		case R:
+			ReportData->Button |= SWITCH_R;
+			break;
+
+		case L:
+			ReportData->Button |= SWITCH_L;
+			break;
+
+		case THROW:
+			ReportData->LY = STICK_MIN;				
+			ReportData->Button |= SWITCH_R;
+			break;
+
+		case TRIGGERS:
+			ReportData->Button |= SWITCH_L | SWITCH_R;
+			break;
+
+		default:
+			ReportData->LX = STICK_CENTER;
+			ReportData->LY = STICK_CENTER;
+			ReportData->RX = STICK_CENTER;
+			ReportData->RY = STICK_CENTER;
+			ReportData->HAT = HAT_CENTER;
+			break;
+	}
 }
 
 // Process and deliver data from IN and OUT endpoints.
@@ -169,22 +246,26 @@ typedef enum {
 	SYNC_CONTROLLER,
 	SYNC_POSITION,
 	BREATHE,
-	PROCESS,
-	CLEANUP,
-	DONE
+	PROCESS
 } State_t;
 State_t state = SYNC_CONTROLLER;
 
 #define ECHOES 2
 int echoes = 0;
 USB_JoystickReport_Input_t last_report;
+int pd1_previous = 0;
 
-int report_count = 0;
-int xpos = 0;
-int ypos = 0;
-int bufindex = 0;
-int duration_count = 0;
-int portsval = 0;
+int ass;
+
+
+int digitalRead(int port_in, int pin) {
+	return port_in & (1<<pin);
+}
+
+void read(InputData* inputData) {
+	int reading = digitalRead(inputData->port, inputData->pin);
+	inputData->state = reading == 0;
+}
 
 // Prepare the next report for the host.
 void GetNextReport(USB_JoystickReport_Input_t* const ReportData) {
@@ -214,8 +295,6 @@ void GetNextReport(USB_JoystickReport_Input_t* const ReportData) {
 			break;
 
 		case SYNC_POSITION:
-			bufindex = 0;
-
 
 			ReportData->Button = 0;
 			ReportData->LX = STICK_CENTER;
@@ -234,116 +313,29 @@ void GetNextReport(USB_JoystickReport_Input_t* const ReportData) {
 
 		case PROCESS:
 
-			switch (step[bufindex].button)
-			{
+			ass = digitalRead(PIND, PD1);
+			if (ass == 0 && ass != pd1_previous) {
+				PressButton(ReportData, A);
+			}
+			state = BREATHE;
 
-				case UP:
-					ReportData->LY = STICK_MIN;				
-					break;
+			pd1_previous = ass;
 
-				case LEFT:
-					ReportData->LX = STICK_MIN;				
-					break;
+			/*
+			// Read the port/pin defined by input
+			read(&input_a);
 
-				case DOWN:
-					ReportData->LY = STICK_MAX;				
-					break;
-
-				case RIGHT:
-					ReportData->LX = STICK_MAX;				
-					break;
-
-				case PLUS:
-					ReportData->Button |= SWITCH_PLUS;
-					break;
-
-				case MINUS:
-					ReportData->Button |= SWITCH_MINUS;
-					break;
-
-				case A:
-					ReportData->Button |= SWITCH_A;
-					break;
-
-				case B:
-					ReportData->Button |= SWITCH_B;
-					break;
-
-				case X:
-					ReportData->Button |= SWITCH_X;
-					break;
-
-				case Y:
-					ReportData->Button |= SWITCH_Y;
-					break;
-
-				case R:
-					ReportData->Button |= SWITCH_R;
-					break;
-
-				case L:
-					ReportData->Button |= SWITCH_L;
-					break;
-
-				case THROW:
-					ReportData->LY = STICK_MIN;				
-					ReportData->Button |= SWITCH_R;
-					break;
-
-				case TRIGGERS:
-					ReportData->Button |= SWITCH_L | SWITCH_R;
-					break;
-
-				default:
-					ReportData->LX = STICK_CENTER;
-					ReportData->LY = STICK_CENTER;
-					ReportData->RX = STICK_CENTER;
-					ReportData->RY = STICK_CENTER;
-					ReportData->HAT = HAT_CENTER;
-					break;
+			// If the input is pressed, set the input's button for the next report
+			if (input_a.state) {// && !input_a.previous_state) {
+				PressButton(ReportData, input_a.button);
 			}
 
-			duration_count++;
-
-			if (duration_count > step[bufindex].duration)
-			{
-				bufindex++;
-				duration_count = 0;				
-			}
-
-
-			if (bufindex > (int)( sizeof(step) / sizeof(step[0])) - 1)
-			{
-
-				// state = CLEANUP;
-
-				bufindex = 7;
-				duration_count = 0;
-
-				state = BREATHE;
-
-				ReportData->LX = STICK_CENTER;
-				ReportData->LY = STICK_CENTER;
-				ReportData->RX = STICK_CENTER;
-				ReportData->RY = STICK_CENTER;
-				ReportData->HAT = HAT_CENTER;
-
-			}
+			// Update previous state
+			input_a.previous_state = input_a.state;
+			state = BREATHE;
+			*/
 
 			break;
-
-		case CLEANUP:
-			state = DONE;
-			break;
-
-		case DONE:
-			#ifdef ALERT_WHEN_DONE
-			portsval = ~portsval;
-			PORTD = portsval; //flash LED(s) and sound buzzer if attached
-			PORTB = portsval;
-			_delay_ms(250);
-			#endif
-			return;
 	}
 
 

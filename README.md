@@ -9,9 +9,13 @@ Things I did, installing on Linux Mint:
 4. Run `make`
 5. Follow https://github.com/shinyquagsire23/Switch-Fightstick#compiling-and-flashing-onto-the-arduino-micro to flash Joystick.hex
  * I got an error, `SerialException: Error touching serial port '/dev/ttyACM0'.`.  Fixed by running `sudo chmod a+rw /dev/ttyACM0` 
- * I had to be very fast to CTRL+A and CTRL+C the avrdude command from the console output. There was too much output and the console cleared the scrollback. I captured my command in `flash.sh`
+ * I had to be very fast to CTRL+A and CTRL+C the avrdude command from the console output. There was too much output and the console cleared the scrollback. I captured my command in `flash`
 
 Next steps... define some input pins, and hook up some buttons. Let's hope the latency is good enough for Taiko Drum Master!
+
+Here's how I figured out how to set the pins:
+* https://medium.com/@jrejaud/arduino-to-avr-c-reference-guide-7d113b4309f7
+* https://www.arduino.cc/en/Hacking/PinMapping
 
 # World of Final Fantasy XP Auto-Grinder
 
