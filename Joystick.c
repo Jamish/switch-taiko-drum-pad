@@ -242,14 +242,6 @@ void HID_Task(void) {
 	}
 }
 
-typedef enum {
-	SYNC_CONTROLLER,
-	SYNC_POSITION,
-	BREATHE,
-	PROCESS
-} State_t;
-State_t state = SYNC_CONTROLLER;
-
 #define ECHOES 2
 int echoes = 0;
 USB_JoystickReport_Input_t last_report;
@@ -278,7 +270,6 @@ void GetNextReport(USB_JoystickReport_Input_t* const ReportData) {
 	ReportData->RY = STICK_CENTER;
 	ReportData->HAT = HAT_CENTER;
 
-	// Repeat ECHOES times the last report
 	if (echoes > 0)
 	{
 		memcpy(ReportData, &last_report, sizeof(USB_JoystickReport_Input_t));
@@ -286,57 +277,26 @@ void GetNextReport(USB_JoystickReport_Input_t* const ReportData) {
 		return;
 	}
 
-	// States and moves management
-	switch (state)
-	{
-
-		case SYNC_CONTROLLER:
-			state = BREATHE;
-			break;
-
-		case SYNC_POSITION:
-
-			ReportData->Button = 0;
-			ReportData->LX = STICK_CENTER;
-			ReportData->LY = STICK_CENTER;
-			ReportData->RX = STICK_CENTER;
-			ReportData->RY = STICK_CENTER;
-			ReportData->HAT = HAT_CENTER;
-
-
-			state = BREATHE;
-			break;
-
-		case BREATHE:
-			state = PROCESS;
-			break;
-
-		case PROCESS:
-
-			ass = digitalRead(PIND, PD1);
-			if (ass == 0 && ass != pd1_previous) {
-				PressButton(ReportData, A);
-			}
-			state = BREATHE;
-
-			pd1_previous = ass;
-
-			/*
-			// Read the port/pin defined by input
-			read(&input_a);
-
-			// If the input is pressed, set the input's button for the next report
-			if (input_a.state) {// && !input_a.previous_state) {
-				PressButton(ReportData, input_a.button);
-			}
-
-			// Update previous state
-			input_a.previous_state = input_a.state;
-			state = BREATHE;
-			*/
-
-			break;
+	ass = digitalRead(PIND, PD1);
+	if (ass == 0 && ass != pd1_previous) {
+		PressButton(ReportData, A);
 	}
+
+	pd1_previous = ass;
+
+	/*
+	// Read the port/pin defined by input
+	read(&input_a);
+
+	// If the input is pressed, set the input's button for the next report
+	if (input_a.state) {// && !input_a.previous_state) {
+		PressButton(ReportData, input_a.button);
+	}
+
+	// Update previous state
+	input_a.previous_state = input_a.state;
+	state = BREATHE;
+	*/
 
 
 	// Prepare to echo this report
