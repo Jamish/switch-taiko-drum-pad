@@ -24,46 +24,8 @@ these buttons for our use.
 
 #include "Joystick.h"
 
-typedef enum {
-	UP,
-	DOWN,
-	LEFT,
-	RIGHT,
-	X,
-	Y,
-	A,
-	B,
-	L,
-	R,
-	THROW,
-	NOTHING,
-	PLUS,
-	MINUS,
-	TRIGGERS
-} Buttons_t;
-
-typedef struct {
-	int pin;
-	int port;
-	Buttons_t button;
-	int state;
-	int previous_state;
-} InputData;
-
-void initializeInputData(InputData* input, int pin, int port, Buttons_t button) {
-	input->pin = pin;
-	input->port = port;
-	input->button = button;
-	input->state = 0;
-	input->previous_state = 0;
-}
-
-InputData input_a;
-
 // Main entry point.
 int main(void) {
-	// Initialize variables
-	initializeInputData(&input_a, PIND, PD1, A);
 
 	// We'll start by performing hardware and peripheral setup.
 	SetupHardware();
@@ -88,9 +50,21 @@ void SetupHardware(void) {
 	// We need to disable clock division before initializing the USB hardware.
 	clock_prescale_set(clock_div_1);
 
-	// Pin PD1 = Pin Digital 2 on Arduino Micro
+	// Pin PD1 = Pin Digital 2 on Arduino Micro = Left Don = Right
 	DDRD &= ~(1<<PD1); // Low is input. High is output. This sets the Data Direction Register "D" bit corresponding to Pin D2 to 0, or input.
 	PORTD |= (1<<PD1); // Set internal pull-up resistor on PD2
+
+	// // Pin PD0 = Pin Digital 3 on Arduino Micro = Right Don = B
+	DDRD &= ~(1<<PD0);
+	PORTD |= (1<<PD0);
+
+	// // Pin PD4 = Pin Digital 4 on Arduino Micro = Left Ka = ZL
+	DDRD &= ~(1<<PD4);
+	PORTD |= (1<<PD4);
+
+	// // Pin PC6 = Pin Digital 5 on Arduino Micro = Right Ka = A
+	DDRC &= ~(1<<PC6);
+	PORTC |= (1<<PC6);
 
 	// Set LED pin to Output (Pin 13 on arduino, PC7 on atmega)
 	DDRC |= (1<<PC7);
@@ -128,76 +102,6 @@ void EVENT_USB_Device_ControlRequest(void) {
 	// We can handle two control requests: a GetReport and a SetReport.
 
 	// Not used here, it looks like we don't receive control request from the Switch.
-}
-
-void PressButton(USB_JoystickReport_Input_t* const ReportData, Buttons_t button) {
-	switch (button)
-	{
-		case UP:
-			ReportData->LY = STICK_MIN;				
-			break;
-
-		case LEFT:
-			ReportData->LX = STICK_MIN;				
-			break;
-
-		case DOWN:
-			ReportData->LY = STICK_MAX;				
-			break;
-
-		case RIGHT:
-			ReportData->LX = STICK_MAX;				
-			break;
-
-		case PLUS:
-			ReportData->Button |= SWITCH_PLUS;
-			break;
-
-		case MINUS:
-			ReportData->Button |= SWITCH_MINUS;
-			break;
-
-		case A:
-			ReportData->Button |= SWITCH_A;
-			break;
-
-		case B:
-			ReportData->Button |= SWITCH_B;
-			break;
-
-		case X:
-			ReportData->Button |= SWITCH_X;
-			break;
-
-		case Y:
-			ReportData->Button |= SWITCH_Y;
-			break;
-
-		case R:
-			ReportData->Button |= SWITCH_R;
-			break;
-
-		case L:
-			ReportData->Button |= SWITCH_L;
-			break;
-
-		case THROW:
-			ReportData->LY = STICK_MIN;				
-			ReportData->Button |= SWITCH_R;
-			break;
-
-		case TRIGGERS:
-			ReportData->Button |= SWITCH_L | SWITCH_R;
-			break;
-
-		default:
-			ReportData->LX = STICK_CENTER;
-			ReportData->LY = STICK_CENTER;
-			ReportData->RX = STICK_CENTER;
-			ReportData->RY = STICK_CENTER;
-			ReportData->HAT = HAT_CENTER;
-			break;
-	}
 }
 
 // Process and deliver data from IN and OUT endpoints.
@@ -246,16 +150,9 @@ void HID_Task(void) {
 int echoes = 0;
 USB_JoystickReport_Input_t last_report;
 
-int ass;
-
 
 int digitalRead(int port_in, int pin) {
-	return port_in & (1<<pin);
-}
-
-void read(InputData* inputData) {
-	int reading = digitalRead(inputData->port, inputData->pin);
-	inputData->state = reading == 0;
+	return (port_in & (1<<pin)) == 0;
 }
 
 // Prepare the next report for the host.
@@ -276,25 +173,21 @@ void GetNextReport(USB_JoystickReport_Input_t* const ReportData) {
 		return;
 	}
 
-	ass = digitalRead(PIND, PD1);
-	if (ass == 0) {
-		PressButton(ReportData, A);
+	if (digitalRead(PIND, PD1)) {
+		ReportData->HAT = HAT_RIGHT;
 	}
 
-	/*
-	// Read the port/pin defined by input
-	read(&input_a);
-
-	// If the input is pressed, set the input's button for the next report
-	if (input_a.state) {// && !input_a.previous_state) {
-		PressButton(ReportData, input_a.button);
+	if (digitalRead(PIND, PD0)) {
+		ReportData->Button |= SWITCH_B;
 	}
 
-	// Update previous state
-	input_a.previous_state = input_a.state;
-	state = BREATHE;
-	*/
+	if (digitalRead(PIND, PD4)) {
+		ReportData->Button |= SWITCH_ZL;
+	}
 
+	if (digitalRead(PINC, PC6)) {
+		ReportData->Button |= SWITCH_A;
+	}
 
 	// Prepare to echo this report
 	memcpy(&last_report, ReportData, sizeof(USB_JoystickReport_Input_t));
